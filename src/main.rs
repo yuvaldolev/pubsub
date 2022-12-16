@@ -11,5 +11,6 @@ struct Cli {
 }
 
 fn main() {
-    let _cli = Cli::parse();
+    let pub_sub = PubSub::new(cli.pub_port, cli.sub_port);
+    pub_sub.run();
 }
