@@ -21,10 +21,12 @@ impl PubSub {
         );
 
         // Start the publisher TCP listener.
-        let _publisher_listener = Self::start_background_tcp_listener(self.publisher_port);
+        let _publisher_listener =
+            Self::start_background_tcp_listener(self.publisher_port, ConnectionKind::Publisher);
 
         // Start the subscriber TCP listener.
-        let _subscriber_listener = Self::start_background_tcp_listener(self.subscriber_port);
+        let _subscriber_listener =
+            Self::start_background_tcp_listener(self.subscriber_port, ConnectionKind::Subscriber);
 
         loop {
             log::debug!("In pubsub thread");

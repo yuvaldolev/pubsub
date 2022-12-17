@@ -1,0 +1,4 @@
+enum ConnectionKind {
+    Publisher,
+    Subscriber,
+}
