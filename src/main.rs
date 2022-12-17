@@ -13,6 +13,9 @@ struct Cli {
 }
 
 fn main() {
+    // Initialize the logger according to the environment.
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
+
     // Parse the command line arguments.
     let cli = Cli::parse();
 

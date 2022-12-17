@@ -9,9 +9,10 @@ impl PubSub {
     }
 
     pub fn run(&self) {
-        println!(
+        log::info!(
             "Running: pub_port={}, sub_port={}",
-            self.pub_port, self.sub_port
+            self.pub_port,
+            self.sub_port
         );
     }
 }
