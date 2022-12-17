@@ -14,5 +14,14 @@ impl PubSub {
             self.pub_port,
             self.sub_port
         );
+        // let publisher_listener = BackgroundTcpListener::new(format!("0.0.0.0:{}", self.pub_port));
+        // publisher_listener.listen(|| self.handle_publisher_connected());
+
+        // Spawn a thread for listening to incoming publisher connections.
+        // let subscriber
+        // let publisher_thread = thread::spawn(move || self.listen_for_publishers());
+        // publisher_thread.join();
+
+        // Spawn a thread for listening to incoming subscriber connections.
     }
 }
