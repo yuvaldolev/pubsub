@@ -30,13 +30,6 @@ impl PubSub {
             log::debug!("In pubsub thread");
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
-
-        // Spawn a thread for listening to incoming publisher connections.
-        // let subscriber
-        // let publisher_thread = thread::spawn(move || self.listen_for_publishers());
-        // publisher_thread.join();
-
-        // Spawn a thread for listening to incoming subscriber connections.
     }
 
     fn start_background_tcp_listener(port: u16) -> BackgroundTcpListener {
