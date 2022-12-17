@@ -15,7 +15,7 @@ impl PubSub {
 
     pub fn run(&self) {
         log::info!(
-            "Running: publisher_port={}, subscriber_port={}",
+            "Running: publisher_port=({}), subscriber_port=({})",
             self.publisher_port,
             self.subscriber_port
         );

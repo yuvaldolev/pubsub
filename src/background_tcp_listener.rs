@@ -14,6 +14,8 @@ impl BackgroundTcpListener {
     }
 
     fn listen(address: String) {
+        log::info!("Listening for connections to: [{}]", address);
+
         // Create the TCP listener.
         // TODO: Proper error handling.
         let listener = TcpListener::bind(address).unwrap();
