@@ -25,6 +25,7 @@ impl PubSub {
         );
 
         // Create a channel for sending and receiving events.
+        // TODO: Should this be moved to a member???
         log::debug!("Creating events channel");
         let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = channel::unbounded();
 
