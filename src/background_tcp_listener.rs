@@ -1,19 +1,29 @@
 use std::net::TcpListener;
 use std::thread::{self, JoinHandle};
 
+use crossbeam::channel::Sender;
+
+use crate::connection_kind::ConnectionKind;
+use crate::event::Event;
+
 pub struct BackgroundTcpListener {
     listener_thread: Option<JoinHandle<()>>,
 }
 
 impl BackgroundTcpListener {
-    pub fn new(address: String) -> Self {
-        let listener_thread = thread::spawn(|| Self::listen(address));
+    pub fn new(
+        address: String,
+        connection_kind: ConnectionKind,
+        event_sender: Sender<Event>,
+    ) -> Self {
+        let listener_thread =
+            thread::spawn(|| Self::listen(address, connection_kind, event_sender));
         Self {
             listener_thread: Some(listener_thread),
         }
     }
 
-    fn listen(address: String) {
+    fn listen(address: String, connection_kind: ConnectionKind, event_sender: Sender<Event>) {
         log::info!("Listening for connections to: [{}]", address);
 
         // Create the TCP listener.
@@ -23,10 +33,9 @@ impl BackgroundTcpListener {
         // Listen for connections.
         // TODO: Proper error handling.
         for stream in listener.incoming() {
-            log::debug!(
-                "Got connection from: {}",
-                stream.unwrap().peer_addr().unwrap()
-            );
+            event_sender
+                .send(Event::Connection(connection_kind.clone(), stream))
+                .unwrap();
         }
     }
 }
