@@ -51,8 +51,8 @@ impl PubSub {
             event_sender.clone(),
         );
 
-        // Handle the incoming events.
-        log::info!("Starting to handle incoming events");
+        // Process the incoming events.
+        log::info!("Starting to process incoming events");
         Self::process_events(event_receiver);
     }
 
