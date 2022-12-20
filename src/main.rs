@@ -12,7 +12,7 @@ struct Cli {
     sub_port: u16,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // Initialize the logger according to the environment.
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
@@ -21,5 +21,7 @@ fn main() {
 
     // Initial and run the pubsub system.
     let pub_sub = PubSub::new(cli.pub_port, cli.sub_port);
-    pub_sub.run();
+    pub_sub.process_events()?;
+
+    Ok(())
 }

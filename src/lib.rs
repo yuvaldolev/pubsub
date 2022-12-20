@@ -1,5 +1,6 @@
 mod background_tcp_listener;
 mod connection_kind;
+mod error;
 mod event;
 mod pubsub;
 
