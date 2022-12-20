@@ -1,41 +1,39 @@
+use std::io;
+use std::net::TcpStream;
+
 use crossbeam::channel::{self, Receiver, Sender};
 
 use crate::background_tcp_listener::BackgroundTcpListener;
 use crate::connection_kind::ConnectionKind;
+use crate::error;
 use crate::event::Event;
 
 pub struct PubSub {
-    publisher_port: u16,
-    subscriber_port: u16,
+    _publisher_listener: BackgroundTcpListener,
+    _subscriber_listener: BackgroundTcpListener,
+    event_sender: Sender<Event>,
+    event_receiver: Receiver<Event>,
 }
 
 impl PubSub {
     pub fn new(publisher_port: u16, subscriber_port: u16) -> Self {
-        Self {
-            publisher_port,
-            subscriber_port,
-        }
-    }
-
-    pub fn run(&self) {
         log::info!(
-            "Running: publisher_port=({}), subscriber_port=({})",
-            self.publisher_port,
-            self.subscriber_port
+            "PubSub: publisher_port=({}), subscriber_port=({})",
+            publisher_port,
+            subscriber_port
         );
 
-        // Create a channel for sending and receiving events.
-        // TODO: Should this be moved to a member???
-        log::debug!("Creating events channel");
+        // Create a channel that will be used for communication between threads.
+        log::info!("Creating the communication channel");
         let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = channel::unbounded();
 
         // Start the publisher TCP listener.
         log::info!(
             "Starting the publisher TCP listener on port: ({})",
-            self.publisher_port
+            publisher_port
         );
-        let _publisher_listener = Self::start_background_tcp_listener(
-            self.publisher_port,
+        let publisher_listener = Self::start_background_tcp_listener(
+            publisher_port,
             ConnectionKind::Publisher,
             event_sender.clone(),
         );
@@ -43,17 +41,36 @@ impl PubSub {
         // Start the subscriber TCP listener.
         log::info!(
             "Starting the subscriber TCP listener on port: ({})",
-            self.subscriber_port
+            subscriber_port
         );
-        let _subscriber_listener = Self::start_background_tcp_listener(
-            self.subscriber_port,
+        let subscriber_listener = Self::start_background_tcp_listener(
+            subscriber_port,
             ConnectionKind::Subscriber,
             event_sender.clone(),
         );
 
-        // Handle the incoming events.
-        log::info!("Starting to handle incoming events");
-        Self::process_events(event_receiver);
+        // Create the PubSub instance.
+        Self {
+            _publisher_listener: publisher_listener,
+            _subscriber_listener: subscriber_listener,
+            event_sender,
+            event_receiver,
+        }
+    }
+
+    pub fn process_events(&self) -> error::Result<()> {
+        log::info!("Starting to process incoming events");
+
+        loop {
+            // Receive an event from the channel.
+            let event = self.event_receiver.recv()?;
+            log::debug!("Received event: {:?}", event);
+
+            // Handle the event.
+            self.handle_event(&event);
+        }
+
+        Ok(())
     }
 
     fn start_background_tcp_listener(
@@ -65,10 +82,24 @@ impl PubSub {
         BackgroundTcpListener::new(address, connection_kind, event_sender)
     }
 
-    fn process_events(receiver: Receiver<Event>) {
-        loop {
-            let event = receiver.recv();
-            log::debug!("Received event: {:?}", event.unwrap());
+    fn handle_event(&self, event: &Event) {
+        match event {
+            Event::Connection(kind, stream) => self.handle_connection(kind, stream),
         }
+    }
+
+    fn handle_connection(&self, kind: &ConnectionKind, stream: &io::Result<TcpStream>) {
+        match kind {
+            ConnectionKind::Publisher => self.handle_publisher_connection(stream),
+            ConnectionKind::Subscriber => self.handle_subscriber_connection(stream),
+        }
+    }
+
+    fn handle_publisher_connection(&self, stream: &io::Result<TcpStream>) {
+        log::debug!("Publisher connection: {stream:?}");
+    }
+
+    fn handle_subscriber_connection(&self, stream: &io::Result<TcpStream>) {
+        log::debug!("Subscriber connection: {stream:?}");
     }
 }
