@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Initial and run the pubsub system.
-    let pub_sub = PubSub::new(cli.pub_port, cli.sub_port);
+    let mut pub_sub = PubSub::new(cli.pub_port, cli.sub_port);
     pub_sub.process_events()?;
 
     Ok(())

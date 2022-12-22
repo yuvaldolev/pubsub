@@ -7,8 +7,11 @@ use crate::background_tcp_listener::BackgroundTcpListener;
 use crate::connection_kind::ConnectionKind;
 use crate::error;
 use crate::event::Event;
+use crate::message::Message;
+use crate::publisher_handler::PublisherHandler;
 
 pub struct PubSub {
+    publisher_handlers: Vec<PublisherHandler>,
     _publisher_listener: BackgroundTcpListener,
     _subscriber_listener: BackgroundTcpListener,
     event_sender: Sender<Event>,
@@ -51,6 +54,7 @@ impl PubSub {
 
         // Create the PubSub instance.
         Self {
+            publisher_handlers: Vec::new(),
             _publisher_listener: publisher_listener,
             _subscriber_listener: subscriber_listener,
             event_sender,
@@ -58,19 +62,19 @@ impl PubSub {
         }
     }
 
-    pub fn process_events(&self) -> error::Result<()> {
+    pub fn process_events(&mut self) -> error::Result<()> {
         log::info!("Starting to process incoming events");
 
         loop {
             // Receive an event from the channel.
             let event = self.event_receiver.recv()?;
-            log::debug!("Received event: {:?}", event);
+            log::info!("Received event: [{}]", event);
 
             // Handle the event.
-            self.handle_event(&event);
+            if let Err(e) = self.handle_event(event) {
+                log::error!("Error while handling event: [{}]", e);
+            }
         }
-
-        Ok(())
     }
 
     fn start_background_tcp_listener(
@@ -82,24 +86,42 @@ impl PubSub {
         BackgroundTcpListener::new(address, connection_kind, event_sender)
     }
 
-    fn handle_event(&self, event: &Event) {
+    fn handle_event(&mut self, event: Event) -> error::Result<()> {
         match event {
-            Event::Connection(kind, stream) => self.handle_connection(kind, stream),
+            Event::Connection(kind, stream) => self.handle_connection(kind, stream)?,
+            Event::Publish(message) => self.handle_publish(message),
         }
+
+        Ok(())
     }
 
-    fn handle_connection(&self, kind: &ConnectionKind, stream: &io::Result<TcpStream>) {
+    fn handle_connection(
+        &mut self,
+        kind: ConnectionKind,
+        stream: io::Result<TcpStream>,
+    ) -> error::Result<()> {
         match kind {
-            ConnectionKind::Publisher => self.handle_publisher_connection(stream),
+            ConnectionKind::Publisher => self.handle_publisher_connection(stream)?,
             ConnectionKind::Subscriber => self.handle_subscriber_connection(stream),
         }
+
+        Ok(())
     }
 
-    fn handle_publisher_connection(&self, stream: &io::Result<TcpStream>) {
+    fn handle_publish(&self, message: Message) {
+        log::debug!("Publishing message: [{:?}]", message);
+    }
+
+    fn handle_publisher_connection(&mut self, stream: io::Result<TcpStream>) -> error::Result<()> {
         log::debug!("Publisher connection: {stream:?}");
+
+        let publisher_handler = PublisherHandler::new(stream?, self.event_sender.clone());
+        self.publisher_handlers.push(publisher_handler);
+
+        Ok(())
     }
 
-    fn handle_subscriber_connection(&self, stream: &io::Result<TcpStream>) {
+    fn handle_subscriber_connection(&self, stream: io::Result<TcpStream>) {
         log::debug!("Subscriber connection: {stream:?}");
     }
 }
