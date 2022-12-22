@@ -1,9 +1,13 @@
 use std::io;
 use std::net::TcpStream;
 
-use crate::connection_kind::ConnectionKind;
+use strum_macros::Display;
 
-#[derive(Debug)]
+use crate::connection_kind::ConnectionKind;
+use crate::message::Message;
+
+#[derive(Debug, Display)]
 pub enum Event {
     Connection(ConnectionKind, io::Result<TcpStream>),
+    Publish(Message),
 }

@@ -17,7 +17,7 @@ impl BackgroundTcpListener {
         event_sender: Sender<Event>,
     ) -> Self {
         let listener_thread =
-            thread::spawn(|| Self::listen(address, connection_kind, event_sender));
+            thread::spawn(move || Self::listen(address, connection_kind, event_sender));
         Self {
             listener_thread: Some(listener_thread),
         }
@@ -31,6 +31,7 @@ impl BackgroundTcpListener {
         let listener = TcpListener::bind(address).unwrap();
 
         // Listen for connections.
+        // TODO: Graceful shutdown.
         // TODO: Proper error handling.
         for stream in listener.incoming() {
             event_sender
