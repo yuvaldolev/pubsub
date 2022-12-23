@@ -5,6 +5,7 @@ use crossbeam::channel::{self, Receiver, Sender};
 
 use crate::event::Event;
 use crate::message::Message;
+use crate::subscription_request::SubscriptionRequest;
 
 pub struct SubscriberHandler {
     message_sender: Sender<Message>,
@@ -29,6 +30,12 @@ impl SubscriberHandler {
         event_sender: Sender<Event>,
         message_receiver: Receiver<Message>,
     ) {
-        log::debug!("Handling subscriber: [{:?}]", stream);
+        // Receive the subscriber's subscription request.
+        // TODO: Proper error handling.
+        let subscription_request = SubscriptionRequest::read(&mut stream);
+        log::debug!(
+            "Received subscription request: [{:?}]",
+            subscription_request
+        );
     }
 }
