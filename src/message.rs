@@ -4,10 +4,10 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::error;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Message {
-    topic: String,
-    data: Vec<u8>,
+    pub topic: String,
+    pub data: Vec<u8>,
 }
 
 impl Message {

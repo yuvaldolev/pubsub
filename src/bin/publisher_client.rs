@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Connect to the pubsub server.
-    log::info!("Connection to the pubserver server on port: ({})", cli.port);
+    log::info!("Connecting to the pubsub server on port: ({})", cli.port);
     let mut stream = TcpStream::connect(format!("localhost:{}", cli.port))?;
 
     // Send a message to the "test" topic.
