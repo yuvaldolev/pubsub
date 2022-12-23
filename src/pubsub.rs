@@ -9,8 +9,10 @@ use crate::error;
 use crate::event::Event;
 use crate::message::Message;
 use crate::publisher_handler::PublisherHandler;
+use crate::subscriber_handler::SubscriberHandler;
 
 pub struct PubSub {
+    subscriber_handlers: Vec<SubscriberHandler>,
     publisher_handlers: Vec<PublisherHandler>,
     _publisher_listener: BackgroundTcpListener,
     _subscriber_listener: BackgroundTcpListener,
@@ -54,6 +56,7 @@ impl PubSub {
 
         // Create the PubSub instance.
         Self {
+            subscriber_handlers: Vec::new(),
             publisher_handlers: Vec::new(),
             _publisher_listener: publisher_listener,
             _subscriber_listener: subscriber_listener,
@@ -102,7 +105,7 @@ impl PubSub {
     ) -> error::Result<()> {
         match kind {
             ConnectionKind::Publisher => self.handle_publisher_connection(stream)?,
-            ConnectionKind::Subscriber => self.handle_subscriber_connection(stream),
+            ConnectionKind::Subscriber => self.handle_subscriber_connection(stream)?,
         }
 
         Ok(())
@@ -121,7 +124,12 @@ impl PubSub {
         Ok(())
     }
 
-    fn handle_subscriber_connection(&self, stream: io::Result<TcpStream>) {
+    fn handle_subscriber_connection(&mut self, stream: io::Result<TcpStream>) -> error::Result<()> {
         log::debug!("Subscriber connection: {stream:?}");
+
+        let subscriber_handler = SubscriberHandler::new(stream?, self.event_sender.clone());
+        self.subscriber_handlers.push(subscriber_handler);
+
+        Ok(())
     }
 }

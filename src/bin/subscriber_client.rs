@@ -2,10 +2,8 @@ use std::net::TcpStream;
 
 use clap::Parser;
 
-use pubsub::Message;
-
 #[derive(Parser)]
-#[command(author = "ydolev", version = "1.0.0", about = "A pubsub publisher client written in Rust", long_about = None)]
+#[command(author = "ydolev", version = "1.0.0", about = "A pubsub subscriber client written in Rust", long_about = None)]
 struct Cli {
     port: u16,
 }
@@ -20,11 +18,6 @@ fn main() -> anyhow::Result<()> {
     // Connect to the pubsub server.
     log::info!("Connecting to the pubserver server on port: ({})", cli.port);
     let mut stream = TcpStream::connect(format!("localhost:{}", cli.port))?;
-
-    // Send a message to the "test" topic.
-    log::info!("Sending a message to the 'test' topic");
-    let message = Message::new(String::from("test"), "hello, world".as_bytes().to_vec());
-    message.write(&mut stream)?;
 
     Ok(())
 }
