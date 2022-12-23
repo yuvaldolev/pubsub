@@ -76,17 +76,17 @@ impl PubSub {
     pub fn process_events(&mut self) -> error::Result<()> {
         log::info!("Starting to process incoming events");
 
-        let mut terminate = false;
-        while !terminate {
+        let mut running = true;
+        while running {
             // Receive an event from the channel.
             let event = self.event_receiver.recv()?;
             log::info!("Received event: [{}]", event);
 
             // Handle the event.
-            terminate = match self.handle_event(event) {
-                Ok(terminate) => terminate,
+            running = match self.handle_event(event) {
+                Ok(keep_running) => keep_running,
                 Err(e) => {
-                    log::error!("Error while handling event: [{}]", e);
+                    log::error!("Error handling event: [{}]", e);
                     false
                 }
             }
@@ -116,10 +116,10 @@ impl PubSub {
             Event::SubscriptionRequest(id, request) => {
                 self.handle_subscription_request(id, request)
             }
-            Event::Termination => return Ok(true),
+            Event::Termination => return Ok(false),
         }
 
-        Ok(false)
+        Ok(true)
     }
 
     fn handle_connection(
