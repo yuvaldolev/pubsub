@@ -6,7 +6,7 @@ use crate::error;
 
 #[derive(Debug)]
 pub struct SubscriptionRequest {
-    topics: Vec<String>,
+    pub topics: Vec<String>,
 }
 
 impl SubscriptionRequest {

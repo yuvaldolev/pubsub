@@ -3,7 +3,7 @@ use clap::Parser;
 use pubsub::PubSub;
 
 #[derive(Parser)]
-#[command(author = "ydolev", version = "1.0.0", about = "A pubsub system written in Rust", long_about = None)]
+#[command(author = "ydolev", version = "1.0.0", about = "A pubsub server written in Rust", long_about = None)]
 struct Cli {
     #[arg(long)]
     pub_port: u16,

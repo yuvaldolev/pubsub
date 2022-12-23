@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::io;
 use std::net::TcpStream;
 
 use crossbeam::channel::{self, Receiver, Sender};
+use uuid::Uuid;
 
 use crate::background_tcp_listener::BackgroundTcpListener;
 use crate::connection_kind::ConnectionKind;
@@ -10,9 +12,11 @@ use crate::event::Event;
 use crate::message::Message;
 use crate::publisher_handler::PublisherHandler;
 use crate::subscriber_handler::SubscriberHandler;
+use crate::subscription_request::SubscriptionRequest;
 
 pub struct PubSub {
-    subscriber_handlers: Vec<SubscriberHandler>,
+    subscriber_to_handler: HashMap<Uuid, SubscriberHandler>,
+    topic_to_subscribers: HashMap<String, Vec<Uuid>>,
     publisher_handlers: Vec<PublisherHandler>,
     _publisher_listener: BackgroundTcpListener,
     _subscriber_listener: BackgroundTcpListener,
@@ -56,7 +60,8 @@ impl PubSub {
 
         // Create the PubSub instance.
         Self {
-            subscriber_handlers: Vec::new(),
+            subscriber_to_handler: HashMap::new(),
+            topic_to_subscribers: HashMap::new(),
             publisher_handlers: Vec::new(),
             _publisher_listener: publisher_listener,
             _subscriber_listener: subscriber_listener,
@@ -93,6 +98,9 @@ impl PubSub {
         match event {
             Event::Connection(kind, stream) => self.handle_connection(kind, stream)?,
             Event::Publish(message) => self.handle_publish(message),
+            Event::SubscriptionRequest(id, request) => {
+                self.handle_subscription_request(id, request)
+            }
         }
 
         Ok(())
@@ -113,6 +121,25 @@ impl PubSub {
 
     fn handle_publish(&self, message: Message) {
         log::debug!("Publishing message: [{:?}]", message);
+
+        match self.topic_to_subscribers.get(&message.topic) {
+            Some(subscribers) => {
+                self.publish_message_to_subscribers(message, subscribers);
+            }
+            None => log::warn!("No subscribers registered to topic: [{}]", message.topic),
+        }
+    }
+
+    fn handle_subscription_request(&mut self, id: Uuid, request: SubscriptionRequest) {
+        log::info!("Subscription request from: [{}]", id);
+
+        // Register the subscriber to all requested topics.
+        for topic in request.topics.into_iter() {
+            self.topic_to_subscribers
+                .entry(topic)
+                .or_insert(Vec::new())
+                .push(id);
+        }
     }
 
     fn handle_publisher_connection(&mut self, stream: io::Result<TcpStream>) -> error::Result<()> {
@@ -127,9 +154,39 @@ impl PubSub {
     fn handle_subscriber_connection(&mut self, stream: io::Result<TcpStream>) -> error::Result<()> {
         log::debug!("Subscriber connection: {stream:?}");
 
-        let subscriber_handler = SubscriberHandler::new(stream?, self.event_sender.clone());
-        self.subscriber_handlers.push(subscriber_handler);
+        // Generate a unique ID for the subscriber.
+        let subscriber_id = Uuid::new_v4();
+
+        // Create a new handler for the subscriber.
+        let subscriber_handler =
+            SubscriberHandler::new(subscriber_id, stream?, self.event_sender.clone());
+
+        // Add the subscriber to the handlers map.
+        self.subscriber_to_handler
+            .insert(subscriber_id, subscriber_handler);
 
         Ok(())
+    }
+
+    fn publish_message_to_subscribers(&self, message: Message, subscribers: &Vec<Uuid>) {
+        for subscriber in subscribers {
+            match self.subscriber_to_handler.get(subscriber) {
+                Some(handler) => {
+                    self.publish_message_to_subscriber(message.clone(), subscriber, handler)
+                }
+                None => log::error!("No handler for subscriber: [{}]", subscriber),
+            }
+        }
+    }
+
+    fn publish_message_to_subscriber(
+        &self,
+        message: Message,
+        id: &Uuid,
+        handler: &SubscriberHandler,
+    ) {
+        if let Err(e) = handler.publish(message.clone()) {
+            log::error!("Error publishing message to subscriber [{}]: [{}]", id, e);
+        }
     }
 }

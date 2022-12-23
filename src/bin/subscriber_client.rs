@@ -2,6 +2,7 @@ use std::net::TcpStream;
 
 use clap::Parser;
 
+use pubsub::Message;
 use pubsub::SubscriptionRequest;
 
 #[derive(Parser)]
@@ -18,7 +19,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Connect to the pubsub server.
-    log::info!("Connecting to the pubserver server on port: ({})", cli.port);
+    log::info!("Connecting to the pubsub server on port: ({})", cli.port);
     let mut stream = TcpStream::connect(format!("localhost:{}", cli.port))?;
 
     // Send the subscription request.
@@ -26,5 +27,15 @@ fn main() -> anyhow::Result<()> {
     let subscription_request = SubscriptionRequest::new(topics);
     subscription_request.write(&mut stream)?;
 
-    Ok(())
+    // Receive message from publishers.
+    loop {
+        let message = Message::read(&mut stream)?;
+        let data = String::from_utf8(message.data)?;
+
+        log::info!(
+            "Received message from topic [{}]: [{}]",
+            message.topic,
+            data
+        );
+    }
 }
