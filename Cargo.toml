@@ -10,6 +10,7 @@ anyhow = "1.0.68"
 byteorder = "1.4.3"
 clap = { version = "4.0.29", features = ["derive"] }
 crossbeam = "0.8.2"
+ctrlc = "3.2.4"
 env_logger = "0.10.0"
 log = "0.4.17"
 strum_macros = "0.24.3"

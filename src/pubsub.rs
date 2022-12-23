@@ -25,7 +25,7 @@ pub struct PubSub {
 }
 
 impl PubSub {
-    pub fn new(publisher_port: u16, subscriber_port: u16) -> Self {
+    pub fn new(publisher_port: u16, subscriber_port: u16) -> error::Result<Self> {
         log::info!(
             "PubSub: publisher_port=({}), subscriber_port=({})",
             publisher_port,
@@ -35,6 +35,9 @@ impl PubSub {
         // Create a channel that will be used for communication between threads.
         log::info!("Creating the communication channel");
         let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = channel::unbounded();
+
+        // Register a handler for ctrl-c.
+        Self::register_ctrlc_handler(event_sender.clone())?;
 
         // Start the publisher TCP listener.
         log::info!(
@@ -59,7 +62,7 @@ impl PubSub {
         );
 
         // Create the PubSub instance.
-        Self {
+        Ok(Self {
             subscriber_to_handler: HashMap::new(),
             topic_to_subscribers: HashMap::new(),
             publisher_handlers: Vec::new(),
@@ -67,22 +70,34 @@ impl PubSub {
             _subscriber_listener: subscriber_listener,
             event_sender,
             event_receiver,
-        }
+        })
     }
 
     pub fn process_events(&mut self) -> error::Result<()> {
         log::info!("Starting to process incoming events");
 
-        loop {
+        let mut terminate = false;
+        while !terminate {
             // Receive an event from the channel.
             let event = self.event_receiver.recv()?;
             log::info!("Received event: [{}]", event);
 
             // Handle the event.
-            if let Err(e) = self.handle_event(event) {
-                log::error!("Error while handling event: [{}]", e);
+            terminate = match self.handle_event(event) {
+                Ok(terminate) => terminate,
+                Err(e) => {
+                    log::error!("Error while handling event: [{}]", e);
+                    false
+                }
             }
         }
+
+        Ok(())
+    }
+
+    fn register_ctrlc_handler(event_sender: Sender<Event>) -> error::Result<()> {
+        ctrlc::set_handler(move || event_sender.send(Event::Termination).unwrap())?;
+        Ok(())
     }
 
     fn start_background_tcp_listener(
@@ -94,16 +109,17 @@ impl PubSub {
         BackgroundTcpListener::new(address, connection_kind, event_sender)
     }
 
-    fn handle_event(&mut self, event: Event) -> error::Result<()> {
+    fn handle_event(&mut self, event: Event) -> error::Result<bool> {
         match event {
             Event::Connection(kind, stream) => self.handle_connection(kind, stream)?,
             Event::Publish(message) => self.handle_publish(message),
             Event::SubscriptionRequest(id, request) => {
                 self.handle_subscription_request(id, request)
             }
+            Event::Termination => return Ok(true),
         }
 
-        Ok(())
+        Ok(false)
     }
 
     fn handle_connection(

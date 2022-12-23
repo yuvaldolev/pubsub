@@ -13,4 +13,5 @@ pub enum Event {
     Connection(ConnectionKind, io::Result<TcpStream>),
     Publish(Message),
     SubscriptionRequest(Uuid, SubscriptionRequest),
+    Termination,
 }
