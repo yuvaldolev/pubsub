@@ -1,3 +1,4 @@
+use std::io;
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -49,22 +50,57 @@ impl BackgroundTcpListener {
         event_sender: Sender<Event>,
         terminate: Arc<Mutex<bool>>,
     ) {
-        log::info!("Listening for connections to: [{}]", address);
+        log::info!(
+            "Listening for [{}] connections to: [{}]",
+            connection_kind,
+            address
+        );
 
         // Create the TCP listener.
-        // TODO: Proper error handling.
-        let listener = TcpListener::bind(address).unwrap();
+        let listener = match TcpListener::bind(address.clone()) {
+            Ok(listener) => listener,
+            Err(e) => {
+                log::error!(
+                    "Failed to bind to address [{}] for [{}] connections: [{}]",
+                    address,
+                    connection_kind,
+                    e,
+                );
+                return;
+            }
+        };
 
         // Listen for connections.
-        // TODO: Proper error handling.
         for stream in listener.incoming() {
+            // Check if listening should terminate.
             if *terminate.lock().unwrap() {
                 break;
             }
 
-            event_sender
-                .send(Event::Connection(connection_kind.clone(), stream))
-                .unwrap();
+            // Send a Connection event.
+            Self::send_connection_event(&event_sender, connection_kind.clone(), stream);
+        }
+    }
+
+    fn send_connection_event(
+        event_sender: &Sender<Event>,
+        connection_kind: ConnectionKind,
+        stream: io::Result<TcpStream>,
+    ) {
+        // Ensure that the stream is valid before sending the Connection event.
+        match stream {
+            Ok(stream) => {
+                if let Err(e) =
+                    event_sender.send(Event::Connection(connection_kind.clone(), stream))
+                {
+                    log::error!(
+                        "Failed sending [{}] Connection event: [{}]",
+                        connection_kind,
+                        e,
+                    );
+                }
+            }
+            Err(e) => log::error!("Failed receiving connection: [{}]", e),
         }
     }
 
@@ -77,7 +113,7 @@ impl BackgroundTcpListener {
 impl Drop for BackgroundTcpListener {
     fn drop(&mut self) {
         if let Some(thread) = self.listener_thread.take() {
-            // Indicate the listener thread that it should terminal.
+            // Indicate the listener thread that it should terminate.
             *self.terminate.lock().unwrap() = true;
 
             // Unblock the listener thread.

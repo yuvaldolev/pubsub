@@ -1,4 +1,3 @@
-use std::io;
 use std::net::TcpStream;
 
 use strum_macros::Display;
@@ -10,7 +9,7 @@ use crate::subscription_request::SubscriptionRequest;
 
 #[derive(Debug, Display)]
 pub enum Event {
-    Connection(ConnectionKind, io::Result<TcpStream>),
+    Connection(ConnectionKind, TcpStream),
     Publish(Message),
     SubscriptionRequest(Uuid, SubscriptionRequest),
     Termination,
