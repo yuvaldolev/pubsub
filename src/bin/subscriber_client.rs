@@ -9,6 +9,7 @@ use pubsub::SubscriptionRequest;
 #[command(author = "ydolev", version = "1.0.0", about = "A pubsub subscriber client written in Rust", long_about = None)]
 struct Cli {
     port: u16,
+    topics: Vec<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -23,8 +24,7 @@ fn main() -> anyhow::Result<()> {
     let mut stream = TcpStream::connect(format!("localhost:{}", cli.port))?;
 
     // Send the subscription request.
-    let topics = vec![String::from("hello"), String::from("test")];
-    let subscription_request = SubscriptionRequest::new(topics);
+    let subscription_request = SubscriptionRequest::new(cli.topics);
     subscription_request.write(&mut stream)?;
 
     // Receive message from publishers.

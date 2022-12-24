@@ -20,6 +20,9 @@ pub enum Error {
 
     #[error("failed converting byte vector to UTF-8 String: {0}")]
     FromUtf8(#[from] string::FromUtf8Error),
+
+    #[error("failed registering ctrl-c handler: {0}")]
+    Ctrlc(#[from] ctrlc::Error),
 }
 
 pub type Result<T> = result::Result<T, Error>;

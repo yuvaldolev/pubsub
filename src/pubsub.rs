@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io;
 use std::net::TcpStream;
 
 use crossbeam::channel::{self, Receiver, Sender};
@@ -15,17 +14,17 @@ use crate::subscriber_handler::SubscriberHandler;
 use crate::subscription_request::SubscriptionRequest;
 
 pub struct PubSub {
-    subscriber_to_handler: HashMap<Uuid, SubscriberHandler>,
-    topic_to_subscribers: HashMap<String, Vec<Uuid>>,
-    publisher_handlers: Vec<PublisherHandler>,
     _publisher_listener: BackgroundTcpListener,
     _subscriber_listener: BackgroundTcpListener,
+    publisher_handlers: Vec<PublisherHandler>,
+    subscriber_to_handler: HashMap<Uuid, SubscriberHandler>,
+    topic_to_subscribers: HashMap<String, Vec<Uuid>>,
     event_sender: Sender<Event>,
     event_receiver: Receiver<Event>,
 }
 
 impl PubSub {
-    pub fn new(publisher_port: u16, subscriber_port: u16) -> Self {
+    pub fn new(publisher_port: u16, subscriber_port: u16) -> error::Result<Self> {
         log::info!(
             "PubSub: publisher_port=({}), subscriber_port=({})",
             publisher_port,
@@ -35,6 +34,9 @@ impl PubSub {
         // Create a channel that will be used for communication between threads.
         log::info!("Creating the communication channel");
         let (event_sender, event_receiver): (Sender<Event>, Receiver<Event>) = channel::unbounded();
+
+        // Register a handler for ctrl-c.
+        Self::register_ctrlc_handler(event_sender.clone())?;
 
         // Start the publisher TCP listener.
         log::info!(
@@ -59,30 +61,42 @@ impl PubSub {
         );
 
         // Create the PubSub instance.
-        Self {
+        Ok(Self {
+            _publisher_listener: publisher_listener,
+            _subscriber_listener: subscriber_listener,
             subscriber_to_handler: HashMap::new(),
             topic_to_subscribers: HashMap::new(),
             publisher_handlers: Vec::new(),
-            _publisher_listener: publisher_listener,
-            _subscriber_listener: subscriber_listener,
             event_sender,
             event_receiver,
-        }
+        })
     }
 
     pub fn process_events(&mut self) -> error::Result<()> {
         log::info!("Starting to process incoming events");
 
-        loop {
+        let mut running = true;
+        while running {
             // Receive an event from the channel.
             let event = self.event_receiver.recv()?;
             log::info!("Received event: [{}]", event);
 
             // Handle the event.
-            if let Err(e) = self.handle_event(event) {
-                log::error!("Error while handling event: [{}]", e);
-            }
+            running = match self.handle_event(event) {
+                Ok(keep_running) => keep_running,
+                Err(e) => {
+                    log::error!("Error handling event: [{}]", e);
+                    false
+                }
+            };
         }
+
+        Ok(())
+    }
+
+    fn register_ctrlc_handler(event_sender: Sender<Event>) -> error::Result<()> {
+        ctrlc::set_handler(move || event_sender.send(Event::Termination).unwrap())?;
+        Ok(())
     }
 
     fn start_background_tcp_listener(
@@ -94,23 +108,20 @@ impl PubSub {
         BackgroundTcpListener::new(address, connection_kind, event_sender)
     }
 
-    fn handle_event(&mut self, event: Event) -> error::Result<()> {
+    fn handle_event(&mut self, event: Event) -> error::Result<bool> {
         match event {
             Event::Connection(kind, stream) => self.handle_connection(kind, stream)?,
             Event::Publish(message) => self.handle_publish(message),
             Event::SubscriptionRequest(id, request) => {
                 self.handle_subscription_request(id, request)
             }
+            Event::Termination => return Ok(false),
         }
 
-        Ok(())
+        Ok(true)
     }
 
-    fn handle_connection(
-        &mut self,
-        kind: ConnectionKind,
-        stream: io::Result<TcpStream>,
-    ) -> error::Result<()> {
+    fn handle_connection(&mut self, kind: ConnectionKind, stream: TcpStream) -> error::Result<()> {
         match kind {
             ConnectionKind::Publisher => self.handle_publisher_connection(stream)?,
             ConnectionKind::Subscriber => self.handle_subscriber_connection(stream)?,
@@ -120,7 +131,7 @@ impl PubSub {
     }
 
     fn handle_publish(&self, message: Message) {
-        log::debug!("Publishing message: [{:?}]", message);
+        log::info!("Publishing message to topic: [{}]", message.topic);
 
         match self.topic_to_subscribers.get(&message.topic) {
             Some(subscribers) => {
@@ -135,31 +146,31 @@ impl PubSub {
 
         // Register the subscriber to all requested topics.
         for topic in request.topics.into_iter() {
-            self.topic_to_subscribers
-                .entry(topic)
-                .or_insert(Vec::new())
-                .push(id);
+            self.topic_to_subscribers.entry(topic).or_default().push(id);
         }
     }
 
-    fn handle_publisher_connection(&mut self, stream: io::Result<TcpStream>) -> error::Result<()> {
-        log::debug!("Publisher connection: {stream:?}");
+    fn handle_publisher_connection(&mut self, stream: TcpStream) -> error::Result<()> {
+        log::info!("Publisher connection: [{}]", stream.peer_addr().unwrap());
 
-        let publisher_handler = PublisherHandler::new(stream?, self.event_sender.clone());
+        let publisher_handler = PublisherHandler::new(stream, self.event_sender.clone());
         self.publisher_handlers.push(publisher_handler);
 
         Ok(())
     }
 
-    fn handle_subscriber_connection(&mut self, stream: io::Result<TcpStream>) -> error::Result<()> {
-        log::debug!("Subscriber connection: {stream:?}");
-
+    fn handle_subscriber_connection(&mut self, stream: TcpStream) -> error::Result<()> {
         // Generate a unique ID for the subscriber.
         let subscriber_id = Uuid::new_v4();
+        log::info!(
+            "Generated id [{}] for subscriber [{}]",
+            subscriber_id,
+            stream.peer_addr().unwrap()
+        );
 
         // Create a new handler for the subscriber.
         let subscriber_handler =
-            SubscriberHandler::new(subscriber_id, stream?, self.event_sender.clone());
+            SubscriberHandler::new(subscriber_id, stream, self.event_sender.clone());
 
         // Add the subscriber to the handlers map.
         self.subscriber_to_handler
@@ -185,7 +196,7 @@ impl PubSub {
         id: &Uuid,
         handler: &SubscriberHandler,
     ) {
-        if let Err(e) = handler.publish(message.clone()) {
+        if let Err(e) = handler.publish(message) {
             log::error!("Error publishing message to subscriber [{}]: [{}]", id, e);
         }
     }
