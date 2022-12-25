@@ -78,7 +78,7 @@ impl PublisherHandler {
                 poller.modify(&stream, polling::Event::readable(PUBLISHER_STREAM_POLL_KEY))
             {
                 log::error!(
-                    "Failed to modify the publisher stream [{}] to the poller: [{}]",
+                    "Failed to modify the poller's interest in publisher stream [{}]: [{}]",
                     stream.peer_addr().unwrap(),
                     e
                 );
