@@ -58,8 +58,8 @@ impl PublisherHandler {
             }
         };
 
-        if let Err(e) = poller.modify(&stream, polling::Event::readable(PUBLISHER_STREAM_POLL_KEY))
-        {
+        // Add the publisher stream to the poller.
+        if let Err(e) = poller.add(&stream, polling::Event::readable(PUBLISHER_STREAM_POLL_KEY)) {
             log::error!(
                 "Failed to add the publisher stream [{}] to the poller: [{}]",
                 stream.peer_addr().unwrap(),
@@ -72,7 +72,8 @@ impl PublisherHandler {
         log::info!("Receiving messages from: [{}]", stream.peer_addr().unwrap());
         let mut poll_events: Vec<polling::Event> = Vec::new();
         while !(*terminate.lock().unwrap()) {
-            // Add the publisher stream to the poller.
+            // Modify the poller's interest in the publisher's stream.
+            // This is required to receive multiple read events on macOS.
             if let Err(e) =
                 poller.modify(&stream, polling::Event::readable(PUBLISHER_STREAM_POLL_KEY))
             {
